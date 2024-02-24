@@ -2,10 +2,11 @@ import pygame
 import collections
 import sys
 import random
-
+import itertools
 
 BACKGROUND = (30, 30, 46)
-SNAKE_COLOUR = (242, 205, 205)
+SNAKE_COLOUR = (166, 227, 161)
+APPLE_COLOUR = (243, 139, 168)
 FRAMES_PER_SECOND = 60
 RESOLUTION = 500
 DIRECTIONS = {
@@ -24,6 +25,7 @@ class Snake:
         self.movement = DIRECTIONS['right']
         self.to_grow = False
         self.dead = False
+        self.moving = False
 
     def __len__(self):
         return len(self.snake)
@@ -32,6 +34,7 @@ class Snake:
         return [(rect.x, rect.y) for rect in self.snake]
 
     def change_direction(self, direction):
+        self.moving = True
         self.movement = DIRECTIONS[direction]
 
     def grow(self):
@@ -50,10 +53,16 @@ class Snake:
             self.head.colliderect(body_block)
             for body_block in list(self.snake)[1:]
         )
+        self.moving = False
 
     def render(self):
         for snake_block in self.snake:
-            pygame.draw.rect(self.game.screen, (SNAKE_COLOUR), snake_block)
+            pygame.draw.rect(
+                self.game.screen,
+                (SNAKE_COLOUR),
+                snake_block,
+                border_radius=int(self.game.tilesize[0] / 3),
+            )
 
 
 class Apple:
@@ -62,12 +71,8 @@ class Apple:
         self.apple = pygame.Rect(*self.get_valid_position(), *size)
 
     def get_valid_position(self):
-        snake_pos = self.game.snake.get_positions()
-        x = set(x[0] for x in snake_pos)
-        y = set(x[1] for x in snake_pos)
-        apple_coords = random.choice(
-            list(self.game.tile_coords - x)
-        ), random.choice(list(self.game.tile_coords - y))
+        snake_pos = set(self.game.snake.get_positions())
+        apple_coords = random.choice(list(self.game.tile_coords - snake_pos))
         return apple_coords
 
     def update(self):
@@ -80,11 +85,11 @@ class Apple:
 
     def render(self):
         if self.apple:
-            pygame.draw.rect(
+            pygame.draw.circle(
                 self.game.screen,
-                (255, 0, 0),
-                self.apple,
-                border_radius=int(self.game.tilesize[0] / 2),
+                APPLE_COLOUR,
+                self.apple.center,
+                self.apple.width / 2 - 5,
             )
 
 
@@ -92,20 +97,29 @@ class Game:
     def __init__(self):
         self.screen = pygame.display.set_mode((RESOLUTION, RESOLUTION))
         self.clock = pygame.time.Clock()
-        self.tilesize = (25, 25)
-        self.tile_coords = set(range(0, RESOLUTION, self.tilesize[0]))
+        self.tilesize = (50, 50)
+        self.tile_coords = set(
+            itertools.product(range(0, RESOLUTION, self.tilesize[0]), repeat=2)
+        )
         self.snake = Snake(
             self, (RESOLUTION / 2, RESOLUTION / 2), self.tilesize
         )
         self.apple = Apple(self, self.tilesize)
-        self.speed = 7
+        self.speed = 6
 
     def run(self):
         frame_to_move = int(FRAMES_PER_SECOND / self.speed)
         frame_counter = 0
         while True:
-            if self.snake.dead:
-                # if any(p < 0 or p > RESOLUTION - self.tilesize[0] for p in self.snake.head) or self.snake.dead:
+            if len(self.snake) == len(self.tile_coords):
+                self.end(win=True)
+            if (
+                any(
+                    p < -5 or p > RESOLUTION + 5 - self.tilesize[0]
+                    for p in self.snake.head
+                )
+                or self.snake.dead
+            ):
                 self.end(win=False)
             self.render()
             for event in pygame.event.get():
@@ -113,26 +127,27 @@ class Game:
                     pygame.quit()
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
-                    if (
-                        self.snake.movement != DIRECTIONS['right']
-                        and event.key == pygame.K_LEFT
-                    ):
-                        self.snake.change_direction('left')
-                    if (
-                        self.snake.movement != DIRECTIONS['left']
-                        and event.key == pygame.K_RIGHT
-                    ):
-                        self.snake.change_direction('right')
-                    if (
-                        self.snake.movement != DIRECTIONS['up']
-                        and event.key == pygame.K_DOWN
-                    ):
-                        self.snake.change_direction('down')
-                    if (
-                        self.snake.movement != DIRECTIONS['down']
-                        and event.key == pygame.K_UP
-                    ):
-                        self.snake.change_direction('up')
+                    if not self.snake.moving:
+                        if (
+                            self.snake.movement != DIRECTIONS['right']
+                            and event.key == pygame.K_LEFT
+                        ):
+                            self.snake.change_direction('left')
+                        if (
+                            self.snake.movement != DIRECTIONS['left']
+                            and event.key == pygame.K_RIGHT
+                        ):
+                            self.snake.change_direction('right')
+                        if (
+                            self.snake.movement != DIRECTIONS['up']
+                            and event.key == pygame.K_DOWN
+                        ):
+                            self.snake.change_direction('down')
+                        if (
+                            self.snake.movement != DIRECTIONS['down']
+                            and event.key == pygame.K_UP
+                        ):
+                            self.snake.change_direction('up')
             frame_counter += 1
             if frame_to_move == frame_counter:
                 frame_counter = 0
